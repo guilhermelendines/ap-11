@@ -44,3 +44,58 @@ BEGIN
     INSERT INTO log_operacoes_restaurante (procedimento_nome) VALUES ('sp_calcular_valor_do_troco');
 END;
 $$;
+
+CREATE OR REPLACE PROCEDURE sp_finalizar_pedido(
+    IN valor_pago_cliente INT,
+    IN codigo_pedido INT
+) LANGUAGE plpgsql AS $$
+DECLARE
+    valor_total_pedido INT;
+BEGIN
+    CALL sp_calcular_valor_total_pedido(codigo_pedido, valor_total_pedido);
+    IF valor_pago_cliente < valor_total_pedido THEN
+        RAISE NOTICE 'R$% insuficiente para pagar a conta de R$%', 
+        valor_pago_cliente, valor_total_pedido;
+    ELSE
+        UPDATE pedido p SET
+        data_modificacao = CURRENT_TIMESTAMP,
+        status = 'fechado'
+        WHERE p.cod_pedido = codigo_pedido;
+    END IF;
+
+    -- Registrar no log
+    INSERT INTO log_operacoes_restaurante (procedimento_nome) VALUES ('sp_finalizar_pedido');
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE sp_calcular_valor_total_pedido(
+    IN codigo_pedido INT,
+    OUT total_valor INT
+) LANGUAGE plpgsql AS $$
+BEGIN 
+    SELECT SUM(i.valor) INTO total_valor
+    FROM pedido p
+    INNER JOIN tp_item_pedido ip ON p.cod_pedido = ip.cod_pedido
+    INNER JOIN tp_item i ON ip.cod_item = i.cod_item
+    WHERE p.cod_pedido = codigo_pedido;
+
+    -- Registrar no log
+    INSERT INTO log_operacoes_restaurante (procedimento_nome) VALUES ('sp_calcular_valor_total_pedido');
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE sp_inserir_item_pedido(
+    IN item_id INT,
+    IN pedido_id INT
+) LANGUAGE plpgsql AS $$
+BEGIN
+    -- Inserindo novo item
+    INSERT INTO tp_item_pedido(cod_item, cod_pedido) VALUES (item_id, pedido_id);
+    -- Atualizando data de modificação
+    UPDATE pedido p SET data_modificacao = CURRENT_TIMESTAMP
+    WHERE p.cod_pedido = pedido_id;
+
+    -- Registrar no log
+    INSERT INTO log_operacoes_restaurante (procedimento_nome) VALUES ('sp_inserir_item_pedido');
+END;
+$$;
