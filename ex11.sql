@@ -99,3 +99,117 @@ BEGIN
     INSERT INTO log_operacoes_restaurante (procedimento_nome) VALUES ('sp_inserir_item_pedido');
 END;
 $$;
+
+CREATE OR REPLACE PROCEDURE sp_novo_pedido(
+    OUT pedido_id INT,
+    IN cliente_id INT
+) LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO pedido(cod_cliente) VALUES (cliente_id);
+    -- Obtendo o último valor gerado por serial
+    SELECT LASTVAL() INTO pedido_id;
+
+    -- Registrar no log
+    INSERT INTO log_operacoes_restaurante (procedimento_nome) VALUES ('sp_novo_pedido');
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE sp_adicionar_cliente(
+    IN cliente_nome VARCHAR(200),
+    IN cliente_codigo INT DEFAULT NULL
+) LANGUAGE plpgsql AS $$
+BEGIN 
+    IF cliente_codigo IS NULL THEN
+        INSERT INTO tb_cliente(nome) VALUES (cliente_nome);
+    ELSE
+        INSERT INTO tb_cliente(codigo, nome) VALUES(cliente_codigo, cliente_nome);
+    END IF;
+
+    -- Registrar no log
+    INSERT INTO log_operacoes_restaurante (procedimento_nome) VALUES ('sp_adicionar_cliente');
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE sp_quantidade_pedidos_cliente(
+    IN cliente_id INT
+) LANGUAGE plpgsql AS $$
+DECLARE
+    total_pedidos INT;
+BEGIN
+    SELECT COUNT(*) INTO total_pedidos
+    FROM pedido
+    WHERE cod_cliente = cliente_id;
+
+    RAISE NOTICE 'Total de pedidos do cliente %: %', cliente_id, total_pedidos;
+
+    -- Registrar no log
+    INSERT INTO log_operacoes_restaurante (procedimento_nome) VALUES ('sp_quantidade_pedidos_cliente');
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE sp_quantidade_pedidos_cliente_out(
+    IN cliente_id INT,
+    OUT total_pedidos INT
+) LANGUAGE plpgsql AS $$
+BEGIN
+    SELECT COUNT(*) INTO total_pedidos
+    FROM pedido
+    WHERE cod_cliente = cliente_id;
+
+    -- Registrar no log
+    INSERT INTO log_operacoes_restaurante (procedimento_nome) VALUES ('sp_quantidade_pedidos_cliente_out');
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE sp_quantidade_pedidos_cliente_inout(
+    INOUT cliente_id INT
+) LANGUAGE plpgsql AS $$
+BEGIN
+    SELECT COUNT(*) INTO cliente_id
+    FROM pedido
+    WHERE cod_cliente = cliente_id;
+
+    -- Registrar no log
+    INSERT INTO log_operacoes_restaurante (procedimento_nome) VALUES ('sp_quantidade_pedidos_cliente_inout');
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE sp_inserir_clientes_variadic(
+    INOUT mensagem TEXT,
+    VARIADIC nomes_clientes VARCHAR[]
+) LANGUAGE plpgsql AS $$
+DECLARE
+    cliente_nome VARCHAR;
+BEGIN
+    FOREACH cliente_nome IN ARRAY nomes_clientes
+    LOOP
+        INSERT INTO tb_cliente (nome) VALUES (cliente_nome);
+    END LOOP;
+
+    mensagem := 'Os clientes: ' || array_to_string(nomes_clientes, ', ') || ' foram cadastrados';
+
+    -- Registrar no log
+    INSERT INTO log_operacoes_restaurante (procedimento_nome) VALUES ('sp_inserir_clientes_variadic');
+END;
+$$;
+
+DO $$
+DECLARE
+    resultado_troco VARCHAR(500);
+BEGIN
+    CALL sp_obter_notas_para_o_troco(resultado_troco, 587);
+    RAISE NOTICE 'Resultado: %', resultado_troco;
+END;
+$$;
+
+DO $$
+BEGIN
+    CALL sp_quantidade_pedidos_cliente(1);
+END;
+$$;
+
+DO $$
+DECLARE
+    total_pedidos INT;
+BEGIN
+    CALL sp_quantidade_pedidos_cliente_out(
